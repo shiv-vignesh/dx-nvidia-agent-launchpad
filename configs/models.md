@@ -15,6 +15,18 @@ Sizes marked ≈ are estimates (params × bytes), not doc figures. See
 | **Backup** | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4` | 21.56 GB (rev `0dcd680e5585c791728c83342b311d0a0026dbeb`) | NVIDIA-native story; 1 seq |
 | Smoke-test | `nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8` | ≈5 GB | Generic-arm64 fallback default; weak at planning |
 
+## Hermes (the organizers' suggestion) — already covered
+
+NVIDIA's Hermes-agent page lists its **agent-ready model as `nvidia/Qwen3.6-35B-A3B-NVFP4`** — the *same* model we
+stage as primary. "Hermes" is an **agent runtime** (an OpenClaw alternative that NemoClaw can host — the NemoClaw
+repo says *"run agents like Hermes, LangChain Deep Agents, and OpenClaw"*), not separate weights. So:
+
+| Hermes piece | Status |
+|---|---|
+| Hermes agent-ready **model** | ✅ already staged (`nvidia/Qwen3.6-35B-A3B-NVFP4`) |
+| Hermes **runtime** | ✅ ships with NemoClaw (staged by `setup/install-stack.sh`) |
+| A literal "Hermes" model to tinker with | optional: `NousResearch/Hermes-3-Llama-3.1-8B` (≈16 GB, canonical tool-calling example) — not in the bundle block by default |
+
 ## USB layout (where each lands)
 
 | On the USB | What |

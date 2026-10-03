@@ -1,0 +1,5 @@
+[2026-10-02 23:01:10] job 4482 start | nodes=4 gpus=32 | model=moe-mixtral | bs=8
+[2026-10-02 23:09:44] NCCL WARN Connection timeout to rank 19 (10.0.2.19) after 600000 ms
+[2026-10-02 23:09:44] NCCL INFO watchdog: collective ALLREDUCE timed out
+[2026-10-02 23:09:45] rank 0 | aborting due to NCCL timeout
+[2026-10-02 23:09:47] job 4482 FAILED exit=137

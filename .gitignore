@@ -15,11 +15,14 @@ hf-cache/
 weights/
 models-cache/
 
-# ── USB bundle output (produced by scripts/bundle-offline.sh) ──
+# ── USB bundle output (produced by scripts/bundle-offline.sh & setup/install-stack.sh) ──
 bundle/
 bundle-output/
+stack-bundle/
 wheels/
 *.bundle
+*.src/
+*.tgz
 SHA256SUMS
 
 # ── Secrets ──

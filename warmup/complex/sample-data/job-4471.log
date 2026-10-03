@@ -1,0 +1,5 @@
+[2026-10-02 22:14:01] job 4471 start | nodes=2 gpus=16 | model=llama-70b | bs=32
+[2026-10-02 22:14:55] rank 11 | torch.cuda.OutOfMemoryError: CUDA out of memory.
+  Tried to allocate 2.00 GiB (GPU 3; 79.1 GiB total; 78.8 GiB reserved)
+[2026-10-02 22:14:56] rank 11 | process group aborted
+[2026-10-02 22:14:58] job 4471 FAILED exit=1

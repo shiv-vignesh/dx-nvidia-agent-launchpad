@@ -1,0 +1,5 @@
+[2026-10-03 00:22:03] job 4490 start | nodes=1 gpus=8 | model=qwen-7b | bs=64
+[2026-10-03 00:22:41] Traceback (most recent call last):
+  File "train.py", line 88, in <module>  loss = model(batch["inpt"])
+KeyError: 'inpt'
+[2026-10-03 00:22:41] job 4490 FAILED exit=1
