@@ -1,3 +1,4 @@
+import { chartCoverage } from "./coverage";
 import React, { useEffect, useRef, useState } from "react";
 import {
   House,
@@ -39,6 +40,7 @@ import {
   timecode,
   incomingItems,
 } from "./model";
+import { createSpeechSession } from "./speech";
 const STORAGE = "carechart-demo-v1";
 const preview = new URLSearchParams(window.location.search).get("screen");
 function load() {
@@ -68,17 +70,21 @@ function load() {
   } catch {}
   return initialRecords();
 }
+function savedSession() {
+  try {
+    const value = sessionStorage.getItem("carechart-session");
+    return ["outgoing", "incoming"].includes(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
 export function App() {
   const [records, setRecords] = useState(load);
   const [selected, setSelected] = useState("7");
   const [view, setView] = useState(
-    ["prepare", "recording", "review", "incoming"].includes(preview)
-      ? preview
-      : "home",
+    savedSession() === "incoming" ? "incoming" : "home",
   );
-  const [role, setRole] = useState(
-    preview === "incoming" ? "incoming" : "outgoing",
-  );
+  const [role, setRole] = useState(savedSession() || "outgoing");
   const [nav, setNav] = useState(
     preview && preview !== "home" ? "Handoffs" : "My patients",
   );
@@ -95,8 +101,17 @@ export function App() {
   const [modal, setModal] = useState(null);
   const [question, setQuestion] = useState("");
   const [toast, setToast] = useState(null);
-  const [loggedOut, setLoggedOut] = useState(false);
+  const [loggedOut, setLoggedOut] = useState(() => !savedSession());
+  const [loginRole, setLoginRole] = useState("outgoing");
   const [storageError, setStorageError] = useState(false);
+  const [speechState, setSpeechState] = useState("idle");
+  const [speechError, setSpeechError] = useState("");
+  const [interim, setInterim] = useState("");
+  const [speechConsent, setSpeechConsent] = useState(false);
+  const speechSession = useRef(null);
+  const speechSupported = Boolean(
+    window.SpeechRecognition || window.webkitSpeechRecognition,
+  );
   const toastTimer = useRef();
   const body = useRef();
   const active = patients.find((p) => p.id === selected);
@@ -146,7 +161,7 @@ export function App() {
     }
   }, [records]);
   useEffect(() => {
-    if (!isRecording || paused) return;
+    if (!isRecording || paused || speechState !== "listening") return;
     const id = setInterval(
       () =>
         setRecords((prev) => ({
@@ -159,19 +174,19 @@ export function App() {
       1000,
     );
     return () => clearInterval(id);
-  }, [isRecording, paused, selected]);
+  }, [isRecording, paused, selected, speechState]);
   useEffect(() => {
     body.current?.scrollTo({ top: 0 });
   }, [view, selected, patientTab, nav]);
   useEffect(() => {
-    if (!isRecording || paused) return;
+    if (!isRecording || paused || speechState !== "listening") return;
     const handler = (e) => {
       e.preventDefault();
       e.returnValue = "";
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
-  }, [isRecording, paused]);
+  }, [isRecording, paused, speechState]);
   useEffect(() => {
     if (!profile) return;
     const fn = (e) => {
@@ -180,6 +195,59 @@ export function App() {
     document.addEventListener("click", fn);
     return () => document.removeEventListener("click", fn);
   }, [profile]);
+  useEffect(() => {
+    if (!isRecording || paused || loggedOut) speechSession.current?.stop();
+  }, [isRecording, paused, selected, loggedOut]);
+  useEffect(() => () => speechSession.current?.dispose(), []);
+  function beginSpeech() {
+    if (!speechConsent) {
+      notify(
+        "Before starting, enable sample-only speech on the preparation screen.",
+      );
+      return false;
+    }
+    if (!speechSupported) {
+      setSpeechError(
+        "Live transcription is unavailable in this browser. Open this URL in Chrome, or type your transcript below.",
+      );
+      return false;
+    }
+    if (["starting", "listening", "stopping"].includes(speechState))
+      return false;
+    speechSession.current?.dispose();
+    setSpeechError("");
+    setInterim("");
+    const patientId = selected;
+    speechSession.current = createSpeechSession(
+      window.SpeechRecognition || window.webkitSpeechRecognition,
+      {
+        onFinal: (text) =>
+          setRecords((prev) => ({
+            ...prev,
+            [patientId]: {
+              ...prev[patientId],
+              transcript: [prev[patientId].transcript, text]
+                .filter(Boolean)
+                .join(" "),
+            },
+          })),
+        onInterim: setInterim,
+        onState: (state) => {
+          setSpeechState(state);
+          if (state === "idle") setPaused(true);
+        },
+        onError: setSpeechError,
+      },
+    );
+    speechSession.current.start();
+    return true;
+  }
+  function toggleSpeech() {
+    if (speechState === "listening" || speechState === "starting") {
+      speechSession.current?.stop();
+      setPaused(true);
+    } else if (beginSpeech()) setPaused(false);
+  }
   function save() {
     update({
       saved: new Date().toLocaleTimeString("en-GB", {
@@ -196,6 +264,12 @@ export function App() {
     );
   }
   function move(next) {
+    if (
+      !isIncoming &&
+      record.status === "given" &&
+      ["prepare", "recording", "review", "incoming"].includes(next)
+    )
+      next = "delivered";
     if (isRecording && !paused && next !== "review") {
       setPaused(true);
       update({ stage: "recording" });
@@ -216,7 +290,13 @@ export function App() {
     setSelected(id);
     setOverview(false);
     setPatientTab("Handoff");
-    setView(isIncoming ? "incoming" : "home");
+    setView(
+      isIncoming
+        ? "incoming"
+        : records[id].status === "given"
+          ? "delivered"
+          : "home",
+    );
   }
   function resume() {
     if (isIncoming) {
@@ -225,7 +305,7 @@ export function App() {
     }
     move(
       record.stage === "recording"
-        ? "recording"
+        ? "prepare"
         : record.stage === "review"
           ? "review"
           : record.status === "given"
@@ -234,17 +314,37 @@ export function App() {
     );
   }
   function start() {
-    update({ status: "progress", stage: "recording" });
+    if (!beginSpeech()) return;
+    update({ status: "progress", stage: "recording", liveTranscript: true });
     setPaused(false);
     move("recording");
   }
   function stop() {
+    speechSession.current?.stop();
     update({ stage: "review", status: "progress" });
     setPaused(false);
     move("review");
-    setReviewTab("Not covered");
+    setReviewTab("Transcript");
   }
-  function changeRole(next) {
+  function login(next) {
+    if (!loggedOut) return;
+    try {
+      sessionStorage.setItem("carechart-session", next);
+    } catch {}
+    setLoggedOut(false);
+    setSelected(
+      patients.find(
+        (p) =>
+          next === "incoming" &&
+          records[p.id].status === "given" &&
+          !records[p.id].acknowledged,
+      )?.id || "7",
+    );
+    setSearch("");
+    setModal(null);
+    setSpeechConsent(false);
+    setSpeechError("");
+    setInterim("");
     if (isRecording) setPaused(true);
     window.speechSynthesis?.cancel();
     setRole(next);
@@ -253,6 +353,19 @@ export function App() {
     setProfile(false);
     setPatientTab("Handoff");
     setFilter("all");
+  }
+  function logout() {
+    speechSession.current?.stop();
+    window.speechSynthesis?.cancel();
+    setPaused(true);
+    setModal(null);
+    setProfile(false);
+    setToast(null);
+    setSpeechConsent(false);
+    try {
+      sessionStorage.removeItem("carechart-session");
+    } catch {}
+    setLoggedOut(true);
   }
   function decision(id, value) {
     update((r) => decide(r, id, value));
@@ -263,9 +376,12 @@ export function App() {
     );
   }
   function deliver() {
+    if (isIncoming || record.status === "given") return;
     update({
       status: "given",
       stage: "delivered",
+      signedBy: "A. Rivera, RN",
+      signedAt: new Date().toISOString(),
       delivered: new Date().toLocaleTimeString("en-GB", {
         hour: "2-digit",
         minute: "2-digit",
@@ -273,7 +389,7 @@ export function App() {
     });
     setModal(null);
     move("delivered");
-    notify("Report delivered to M. Chen in this demo.");
+    notify("Handoff signed by A. Rivera and sent to M. Chen’s demo dashboard.");
   }
   const statusLabel = (p) => {
     const r = records[p.id];
@@ -313,8 +429,9 @@ export function App() {
     listed = [...listed].sort(
       (a, b) => Number(b.attention) - Number(a.attention),
     );
-  const reportText =
-    selected === "7"
+  const reportText = record.liveTranscript
+    ? [record.transcript, record.notes].filter(Boolean).join(" ")
+    : selected === "7"
       ? [
           ...transcript,
           ...changes
@@ -337,12 +454,26 @@ export function App() {
       <div className="signed-out">
         <div className="login-card">
           <h1>CareChart</h1>
-          <h2>You’re signed out</h2>
-          <p>Your demo drafts are saved on this browser.</p>
-          <Button primary icon={SignIn} onClick={() => setLoggedOut(false)}>
-            Return to demo
+          <h2>Sign in to your shift</h2>
+          <p>
+            Choose your demo nurse account. Each nurse has a separate workspace;
+            signed reports are available to the receiving nurse.
+          </p>
+          <label htmlFor="nurse-account">Nurse account</label>
+          <select
+            id="nurse-account"
+            value={loginRole}
+            onChange={(e) => setLoginRole(e.target.value)}
+          >
+            <option value="outgoing">
+              A. Rivera, RN · Outgoing · Night shift
+            </option>
+            <option value="incoming">M. Chen, RN · Incoming · Day shift</option>
+          </select>
+          <Button primary icon={SignIn} onClick={() => login(loginRole)}>
+            Sign in
           </Button>
-          <small>Interactive frontend demo · No live patient records</small>
+          <small>Demo sign-in · No password or real authentication</small>
         </div>
       </div>
     );
@@ -380,15 +511,12 @@ export function App() {
           </button>
           {profile && (
             <div className="profile-menu">
-              <span className="eyebrow">Demo perspectives</span>
-              <button onClick={() => changeRole("outgoing")}>
-                <SignOut size={17} />
-                A. Rivera · Outgoing nurse{!isIncoming && <Check size={15} />}
-              </button>
-              <button onClick={() => changeRole("incoming")}>
-                <SignIn size={17} />
-                M. Chen · Incoming nurse{isIncoming && <Check size={15} />}
-              </button>
+              <span className="eyebrow">Signed in as {name}, RN</span>
+              <p>
+                {isIncoming
+                  ? "Incoming nurse · Day shift"
+                  : "Outgoing nurse · Night shift"}
+              </p>
               <hr />
               <button
                 onClick={() => {
@@ -402,16 +530,7 @@ export function App() {
             </div>
           )}
         </div>
-        <Button
-          className="logout"
-          onClick={() => {
-            if (isRecording) {
-              setPaused(true);
-              save();
-            }
-            setLoggedOut(true);
-          }}
-        >
+        <Button className="logout" onClick={logout}>
           Log out
         </Button>
       </header>
@@ -735,6 +854,7 @@ export function App() {
                   selected={selected}
                   record={record}
                   update={update}
+                  readOnly={isIncoming || record.status === "given"}
                   source={source}
                 />
               ) : (
@@ -781,7 +901,7 @@ export function App() {
                             "Review",
                             "Give report",
                             "Address open items",
-                            "Confirm receipt",
+                            "Receipt status",
                           ].map((s, i) => (
                             <button
                               key={s}
@@ -809,7 +929,7 @@ export function App() {
                                       : record.status === "given"
                                         ? move("delivered")
                                         : notify(
-                                            "Receipt can be confirmed after the report is delivered.",
+                                            "The incoming nurse can acknowledge receipt after signing in to her dashboard.",
                                           )
                               }
                             >
@@ -873,6 +993,16 @@ export function App() {
                         <strong className="ready-timer">
                           {timecode(record.seconds)}
                         </strong>
+                        <label className="speech-consent">
+                          <input
+                            type="checkbox"
+                            checked={speechConsent}
+                            onChange={(e) => setSpeechConsent(e.target.checked)}
+                          />
+                          Enable microphone for sample-only speech. My browser
+                          may send audio to its speech service. Do not use real
+                          patient information.
+                        </label>
                         <Button
                           primary
                           className="record-start"
@@ -886,44 +1016,62 @@ export function App() {
                         <p className="muted">
                           Speak as you normally would. Nothing to fill in.
                         </p>
-                        <span className="demo-label">
-                          Demo recording · Sample transcript · Microphone is not
-                          captured
-                        </span>
+
+                        <p className="muted">
+                          Live English transcription · Audio is not saved
+                        </p>
+                        {!speechSupported && (
+                          <p role="status">
+                            Live transcription is unavailable in this browser.
+                            Open this page in Chrome, or enter a typed report
+                            below.
+                          </p>
+                        )}
+                        {speechError && <p role="alert">{speechError}</p>}
+                        <label htmlFor="typed-transcript">
+                          Transcript draft
+                        </label>
+                        <textarea
+                          id="typed-transcript"
+                          rows="3"
+                          value={record.transcript || ""}
+                          onChange={(e) =>
+                            update({
+                              transcript: e.target.value,
+                              liveTranscript: true,
+                            })
+                          }
+                          placeholder="You can also type your report here…"
+                        />
+                        <Button
+                          onClick={() => {
+                            update({ liveTranscript: true });
+                            stop();
+                          }}
+                        >
+                          Review typed report
+                        </Button>
                       </section>
-                      <h3 className="section-title">
-                        Handoff Check will compare your report against{" "}
-                        <small>
-                          {selected === "7"
-                            ? "7 changes this shift"
-                            : "the available chart"}
-                        </small>
-                      </h3>
-                      <div className="change-counts">
-                        {[
-                          [2, "Orders"],
-                          [1, "Vent change"],
-                          [2, "Drip changes"],
-                          [1, "Lab result"],
-                          [1, "Line placed"],
-                        ].map(([n, l]) => (
-                          <div className="panel" key={l}>
-                            <strong>{selected === "7" ? n : "—"}</strong>
-                            <span>{l}</span>
-                          </div>
-                        ))}
-                      </div>
+                      <CoveragePanel patient={selected} text={record.transcript || ""} />
                     </>
                   )}
                   {view === "recording" && (
                     <>
                       <section
-                        className={`recording-bar panel ${paused ? "paused" : ""}`}
+                        className={`recording-bar panel ${speechState !== "listening" ? "paused" : ""}`}
                       >
                         <span className="record-dot" />
-                        <strong>{paused ? "Paused" : "Recording"}</strong>
+                        <strong>
+                          {speechState === "listening"
+                            ? "Listening"
+                            : speechState === "starting"
+                              ? "Connecting…"
+                              : speechState === "stopping"
+                                ? "Finishing…"
+                                : "Paused"}
+                        </strong>
                         <img
-                          className={`waveform ${paused ? "idle" : "live"}`}
+                          className={`waveform ${speechState !== "listening" ? "idle" : "live"}`}
                           src="/assets/waveform.svg"
                           alt={paused ? "" : "Animated recording indicator"}
                         />
@@ -932,81 +1080,46 @@ export function App() {
                         </strong>
                         <Button
                           icon={paused ? Play : Pause}
-                          onClick={() => setPaused(!paused)}
+                          onClick={toggleSpeech}
+                          disabled={speechState === "stopping"}
                         >
                           {paused ? "Resume" : "Pause"}
                         </Button>
-                        <span className="demo-label">Demo recording</span>
+                        <span className="demo-label">
+                          Live speech · Audio not saved
+                        </span>
                       </section>
                       <div className="recording-columns">
                         <section className="panel transcript">
                           <h3>Live transcript</h3>
-                          {selected === "7" ? (
-                            transcript
-                              .slice(
-                                0,
-                                Math.min(6, 1 + Math.floor(record.seconds / 3)),
-                              )
-                              .map((line, i) => (
-                                <p className="transcript-line" key={line}>
-                                  {line}
-                                </p>
-                              ))
-                          ) : (
-                            <p>
-                              {active.context}. This patient’s full report is
-                              not included in the sample.
+                          {speechError && <p role="alert">{speechError}</p>}
+                          <p className="preserve-lines">
+                            {record.transcript ||
+                              "Your words will appear here when you speak."}
+                          </p>
+                          {interim && (
+                            <p
+                              className="muted"
+                              aria-label="Provisional transcript"
+                            >
+                              {interim}
                             </p>
                           )}
-                          <p className="muted faint">
-                            {paused
-                              ? "Recording paused. Resume whenever you’re ready."
-                              : "Sample transcript appears as the demo runs…"}
+                          <p role="status" className="muted faint">
+                            {speechState === "listening"
+                              ? "Listening to your microphone…"
+                              : speechState === "starting"
+                                ? "Waiting for microphone permission and speech service…"
+                                : "Microphone paused. Resume to continue."}
                           </p>
                         </section>
-                        <section className="panel covered">
-                          <h3>Covered so far</h3>
-                          <p className="muted">
-                            {selected === "7"
-                              ? Math.min(3, Math.floor(record.seconds / 4))
-                              : 0}{" "}
-                            of {selected === "7" ? 7 : 0} changes mentioned
-                          </p>
-                          {(selected === "7"
-                            ? [
-                                ["Peripheral line placed", "23:00"],
-                                ["Restraints removed", "00:00"],
-                                ["PEEP raised 5 to 8", "03:40"],
-                                [
-                                  "Potassium 2.9",
-                                  "02:10 · order changed 05:00",
-                                ],
-                                ["Norepinephrine titrated up", "04:50"],
-                              ]
-                            : []
-                          ).map(([label, time], i) => (
-                            <div className="covered-item" key={label}>
-                              <span
-                                className={`coverage-check ${i < Math.min(3, Math.floor(record.seconds / 4)) ? "checked" : ""}`}
-                              >
-                                {i <
-                                  Math.min(
-                                    3,
-                                    Math.floor(record.seconds / 4),
-                                  ) && <Check size={12} />}
-                              </span>
-                              <span>
-                                {label}
-                                <em>{time}</em>
-                              </span>
-                            </div>
-                          ))}
-                        </section>
+                        <CoveragePanel patient={selected} text={record.transcript || ""} interim={interim} />
                       </div>
                     </>
                   )}
                   {view === "review" && (
                     <>
+                      {record.liveTranscript && <CoveragePanel patient={selected} text={record.transcript || ""} />}
                       <section className="panel audio-panel">
                         <Player
                           key={selected}
@@ -1019,7 +1132,7 @@ export function App() {
                           "Report summary",
                           {
                             id: "Not covered",
-                            label: `Not covered · ${selected === "7" ? unresolved.length : 0}`,
+                            label: `${record.liveTranscript ? "Chart reference" : "Not covered"} · ${selected === "7" ? unresolved.length : 0}`,
                           },
                           "Transcript",
                         ]}
@@ -1030,9 +1143,9 @@ export function App() {
                       {reviewTab === "Not covered" ? (
                         <>
                           <p className="review-description">
-                            These changes are in the record for this shift but
-                            did not come up in your report. Add what the next
-                            nurse needs, dismiss the rest.
+                            {record.liveTranscript
+                              ? "These are sample chart changes for manual review. Your speech has not been checked against the chart. Add relevant context for the next nurse."
+                              : "These changes are in the sample chart for this shift. Add what the next nurse needs, dismiss the rest."}
                           </p>
                           {selected === "7" && unresolved.length ? (
                             <div className="panel suggestions">
@@ -1127,8 +1240,9 @@ export function App() {
                         <section className="panel report-content">
                           <h3>Report transcript</h3>
                           <p className="muted">
-                            Demo transcript · Review and correct before
-                            delivery.
+                            Review and correct the transcript before delivery.
+                            Playback uses synthesized speech; microphone audio
+                            is not saved.
                           </p>
                           <label htmlFor="report-notes">
                             Additional notes or corrections
@@ -1140,8 +1254,24 @@ export function App() {
                             placeholder="Add context for the incoming nurse…"
                             onChange={(e) => update({ notes: e.target.value })}
                           />
-                          {selected === "7" &&
-                            transcript.map((p) => <p key={p}>{p}</p>)}
+                          {record.liveTranscript ? (
+                            <>
+                              <label htmlFor="final-transcript">
+                                Your transcript
+                              </label>
+                              <textarea
+                                id="final-transcript"
+                                rows="8"
+                                value={record.transcript || ""}
+                                onChange={(e) =>
+                                  update({ transcript: e.target.value })
+                                }
+                              />
+                            </>
+                          ) : (
+                            selected === "7" &&
+                            transcript.map((p) => <p key={p}>{p}</p>)
+                          )}
                         </section>
                       ) : (
                         <ReportSummary
@@ -1154,25 +1284,24 @@ export function App() {
                   )}
                   {(view === "incoming" || view === "delivered") && (
                     <>
-                      {view === "delivered" ? (
+                      {view === "delivered" && !isIncoming ? (
                         <section className="delivered panel">
                           <CheckCircle size={34} />
                           <div>
                             <h3>
                               {record.acknowledged
                                 ? "Handoff acknowledged"
-                                : "Report delivered to M. Chen"}
+                                : "Handoff signed and sent to M. Chen"}
                             </h3>
                             <p>
                               Bed {active.bed} · {active.name} ·{" "}
                               {record.acknowledged
                                 ? "Receipt confirmed. Open follow-ups remain on the worklist."
-                                : "Waiting for the incoming nurse to acknowledge receipt."}
+                                : "Signed by A. Rivera, RN. You can log out when your shift is complete. M. Chen will sign in separately to acknowledge receipt."}
                             </p>
                           </div>
-                          <Button onClick={() => changeRole("incoming")}>
-                            View as incoming nurse
-                            <ArrowRight size={15} />
+                          <Button onClick={logout} icon={SignOut}>
+                            Log out
                           </Button>
                         </section>
                       ) : null}
@@ -1180,18 +1309,10 @@ export function App() {
                         <Empty title="Waiting for a handoff">
                           No report has been delivered for Bed {active.bed} yet.
                           <br />
-                          Switch to the outgoing nurse to prepare and deliver
-                          one.
-                          <div className="empty-action">
-                            <Button
-                              onClick={() => changeRole("outgoing")}
-                              icon={ArrowsLeftRight}
-                            >
-                              Switch to outgoing nurse
-                            </Button>
-                          </div>
+                          The outgoing nurse has not signed and sent this report
+                          yet. It will be available here once sent.
                         </Empty>
-                      ) : (
+                      ) : isIncoming ? (
                         <>
                           <section className="received panel">
                             <div className="split">
@@ -1349,7 +1470,12 @@ export function App() {
                           ) : (
                             <section className="panel report-content">
                               <h3>Report transcript</h3>
-                              {selected === "7" ? (
+                              {record.liveTranscript ? (
+                                <p className="preserve-lines">
+                                  {record.transcript ||
+                                    "No transcript provided."}
+                                </p>
+                              ) : selected === "7" ? (
                                 transcript.map((p) => <p key={p}>{p}</p>)
                               ) : (
                                 <p>{reportText}</p>
@@ -1358,7 +1484,7 @@ export function App() {
                             </section>
                           )}
                         </>
-                      )}
+                      ) : null}
                     </>
                   )}
                 </>
@@ -1380,7 +1506,7 @@ export function App() {
                         ? "Acknowledged. Follow-up tasks remain open."
                         : `Received ${record.delivered || "06:58"}. ${incoming.length} items still open.`
                     : view === "recording"
-                      ? `${paused ? "Paused" : "Recording"}. Demo audio is not captured.`
+                      ? `${speechState === "listening" ? "Listening" : speechState === "starting" ? "Connecting…" : speechState === "stopping" ? "Finishing…" : "Paused"}. Demo audio is not captured.`
                       : view === "prepare"
                         ? "Not started. Nothing recorded yet."
                         : view === "review"
@@ -1419,8 +1545,8 @@ export function App() {
                 </>
               ) : record.status === "given" ? (
                 <>
-                  <Button onClick={() => changeRole("incoming")}>
-                    View as M. Chen
+                  <Button onClick={logout} icon={SignOut}>
+                    Log out
                   </Button>
                   <Button
                     primary
@@ -1471,7 +1597,7 @@ export function App() {
                         ? "Start recording"
                         : view === "recording"
                           ? "Stop and review"
-                          : "Deliver report to M. Chen"}
+                          : "Sign and send to M. Chen"}
                   </Button>
                 </>
               )}
@@ -1514,7 +1640,7 @@ export function App() {
         <Modal
           title={
             modal.type === "deliver"
-              ? "Deliver handoff"
+              ? "Sign and send handoff"
               : modal.type === "acknowledge"
                 ? "Acknowledge handoff"
                 : modal.type === "question"
@@ -1539,7 +1665,11 @@ export function App() {
                   }
                   onClick={() => {
                     if (modal.type === "deliver") deliver();
-                    if (modal.type === "acknowledge") {
+                    if (
+                      modal.type === "acknowledge" &&
+                      isIncoming &&
+                      availableIncoming
+                    ) {
                       update({ acknowledged: true });
                       setModal(null);
                       notify(
@@ -1569,8 +1699,7 @@ export function App() {
                     if (modal.type === "reset") {
                       setRecords(initialRecords());
                       setSelected("7");
-                      setRole("outgoing");
-                      setView("home");
+                      setView(isIncoming ? "incoming" : "home");
                       setNav("My patients");
                       setFilter("all");
                       setSearch("");
@@ -1581,7 +1710,7 @@ export function App() {
                   }}
                 >
                   {modal.type === "deliver"
-                    ? "Deliver report"
+                    ? "Sign and send report"
                     : modal.type === "acknowledge"
                       ? "Confirm acknowledgement"
                       : modal.type === "question"
@@ -1597,7 +1726,7 @@ export function App() {
           {modal.type === "deliver" && (
             <>
               <p>
-                Deliver the report for{" "}
+                Sign as <strong>A. Rivera, RN</strong> and send the report for{" "}
                 <strong>
                   Bed {active.bed} · {active.name}
                 </strong>{" "}
@@ -1622,8 +1751,9 @@ export function App() {
                 </p>
               )}
               <p className="muted">
-                This is a local demo. No report will be sent to a clinical
-                system.
+                Signing locks this handoff for the outgoing nurse. M. Chen must
+                sign in to her own dashboard to acknowledge it. This is a local
+                demo, not a clinical signature or delivery.
               </p>
             </>
           )}
@@ -1753,7 +1883,14 @@ function ReportSummary({ selected, record, active }) {
     <section className="panel report-content">
       <h3>Report summary · Bed {active.bed}</h3>
       <p className="muted">A. Rivera, RN → M. Chen, RN · Night shift</p>
-      {selected === "7" ? (
+      {record.liveTranscript ? (
+        <>
+          <h4>Recorded transcript</h4>
+          <p className="preserve-lines">
+            {record.transcript || "No transcript provided."}
+          </p>
+        </>
+      ) : selected === "7" ? (
         <>
           <h4>Current situation</h4>
           <p>
@@ -1790,17 +1927,20 @@ function ReportSummary({ selected, record, active }) {
     </section>
   );
 }
-function ChartPanel({ tab, selected, record, update, source }) {
+function ChartPanel({ tab, selected, record, update, source, readOnly }) {
   if (tab === "Notes")
     return (
       <section className="panel report-content">
         <h3>Handoff notes</h3>
         <p className="muted">
-          Notes stay with this patient’s local demo draft.
+          {readOnly
+            ? "Signed handoff notes are read-only in this workspace."
+            : "Notes stay with this patient’s local demo draft."}
         </p>
         <label htmlFor="chart-notes">Additional context</label>
         <textarea
           id="chart-notes"
+          readOnly={readOnly}
           rows="8"
           value={record.notes}
           onChange={(e) => update({ notes: e.target.value })}
@@ -1869,4 +2009,23 @@ function ChartPanel({ tab, selected, record, update, source }) {
       </Button>
     </section>
   );
+}
+
+function CoveragePanel({ patient, text, interim = "" }) {
+  const coverage = chartCoverage(patient, text, interim);
+  return <section className="panel covered live-coverage" aria-label="Live chart coverage">
+    <h3>Chart coverage · Bed {patient}</h3>
+    <p className="muted">Prototype phrase matching · Nurse verification required</p>
+    {coverage.mismatches.length > 0 && <p role="alert" className="notice">Patient mismatch: speech mentions Bed {coverage.mismatches.join(", ")}, but Bed {patient} is selected. Pause and confirm the patient; correct the transcript before relying on coverage. No chart was switched.</p>}
+    {!coverage.items.length ? <p>No detailed sample chart is available for Bed {patient}. Coverage cannot be checked for this patient.</p> : <>
+      <p role="status">{coverage.mentioned} of {coverage.items.length} sample chart items mentioned</p>
+      {coverage.items.map(item => <div className="coverage-row" key={item.id}>
+        <strong>{item.title}</strong>
+        <span className={item.status === "Mentioned" ? "coverage-status matched" : "coverage-status"}>{item.status === "Mentioned" ? "✓ " : ""}{item.status}</span>
+        <small>Chart: {item.source}</small>
+        {item.excerpt && <blockquote>“{item.excerpt}”</blockquote>}
+      </div>)}
+    </>}
+    <p className="muted">A mention does not confirm accuracy or completion. Matching uses this patient’s transcript only; provisional words are not counted.</p>
+  </section>;
 }

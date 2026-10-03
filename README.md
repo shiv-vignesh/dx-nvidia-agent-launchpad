@@ -101,7 +101,7 @@ registry router on `:9000/v1`) and `INFERENCE_MODEL`. On the GB10, `runway -C . 
 The nurse handoff interface lives in [`frontend/`](frontend/README.md). It includes the
 assignment home screen, report preparation, demo recording, review, and incoming
 acknowledgement flow. It runs independently of the `backend/` service using local demo data;
-backend inference, audio capture/transcription, and real delivery are not wired in yet.
+live browser transcription is available after microphone consent. Backend inference and real delivery are not wired in yet. Browser speech recognition may use an external service; use sample speech only.
 
 With Node.js 22.12+ and npm installed:
 
