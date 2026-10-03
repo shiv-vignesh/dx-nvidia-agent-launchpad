@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ShiftGuard — flow walkthrough</title>
+<style>
+:root{
+  --bg:#f3f6f7; --paper:#fff; --ink:#14262b; --muted:#5a6e74; --rule:#d6e1e4;
+  --det:#0d6e74; --det-soft:#dcefef;
+  --ai:#7a3fb5; --ai-soft:#f0e6fa; --ai-line:#c9a6e8;
+  --warn:#b3261e; --warn-soft:#fbe4e2;
+  --mono:ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0f1a1d; --paper:#162428; --ink:#e3eef0; --muted:#9ab0b5; --rule:#2a3d42;
+  --det:#5cc6c9; --det-soft:#13353a;
+  --ai:#c9a6e8; --ai-soft:#2a1d3d; --ai-line:#7a3fb5;
+  --warn:#ff8a80; --warn-soft:#3b1d1b;
+  color-scheme:dark;}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:0 16px 80px}
+.wrap{max-width:900px;margin:0 auto}
+header{padding:28px 0 18px;border-bottom:1px solid var(--rule);margin-bottom:22px}
+h1{margin:0 0 6px;font-size:1.6rem;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:0}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}
+button{font:inherit;border:1px solid var(--rule);background:var(--paper);color:var(--ink);
+  padding:7px 14px;border-radius:7px;cursor:pointer}
+button:hover{border-color:var(--det)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--det);border-color:var(--det);color:#fff;font-weight:600}
+button.ai{background:var(--ai);border-color:var(--ai);color:#fff;font-weight:600}
+.pill{font:600 .72rem var(--mono);letter-spacing:.06em;padding:3px 8px;border-radius:5px}
+.pill.det{background:var(--det-soft);color:var(--det)}
+.pill.ai{background:var(--ai-soft);color:var(--ai)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+
+/* progress rail */
+.rail{display:flex;gap:4px;margin:18px 0 22px}
+.rail i{flex:1;height:5px;border-radius:3px;background:var(--rule)}
+.rail i.done{background:var(--det)}
+.rail i.done.isai{background:var(--ai)}
+.rail i.now{background:var(--ink)}
+
+.card{background:var(--paper);border:1px solid var(--rule);border-radius:11px;padding:20px 22px;margin-bottom:16px}
+.card.aicard{border-color:var(--ai-line);border-left:5px solid var(--ai);background:var(--ai-soft)}
+.card h2{margin:0 0 4px;font-size:1.18rem}
+.who{color:var(--muted);font-size:.9rem;margin:0 0 12px}
+.what{margin:0 0 14px}
+.meta{font:.78rem var(--mono);color:var(--muted);margin-bottom:12px}
+pre{background:var(--bg);border:1px solid var(--rule);border-radius:7px;padding:12px 14px;
+  overflow:auto;max-height:290px;font:12.5px/1.5 var(--mono);margin:10px 0 0;white-space:pre-wrap;word-break:break-word}
+.aicard pre{background:var(--paper)}
+.lbl{font:600 .72rem var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  margin:14px 0 2px;display:block}
+.aicard .lbl{color:var(--ai)}
+ul{margin:6px 0 0;padding-left:20px}
+li{margin:3px 0}
+.tools code{font:.8rem var(--mono);background:var(--paper);border:1px solid var(--ai-line);
+  padding:2px 7px;border-radius:5px;margin-right:6px;display:inline-block}
+.nav{display:flex;gap:10px;justify-content:space-between;margin-top:20px;align-items:center}
+.feed{position:fixed;bottom:0;left:0;right:0;background:var(--paper);border-top:1px solid var(--rule);
+  max-height:148px;overflow:auto;font:11.5px/1.45 var(--mono);padding:8px 16px}
+.feed b{color:var(--muted);font-weight:400}
+.feed .safety{color:var(--warn)}
+.feed .handoff{color:var(--det)}
+.feed .ai{color:var(--ai)}
+.ok{color:var(--det);font-weight:600}
+.bad{color:var(--warn);font-weight:600}
+.note{color:var(--muted);font-size:.86rem;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>ShiftGuard — the handoff, step by step</h1>
+  <p class="sub">A 19:00 shift change on a 3-bed ward. Every step calls the real backend.
+     <span class="pill det">DETERMINISTIC</span> steps run today with no model.
+     <span class="pill ai">AI INFERENCE</span> steps are where a model is required — the agent
+     layer is not built, so those show a sample response.</p>
+  <div class="bar">
+    <button class="primary" id="reset">Reset ward</button>
+    <button id="auto">Play all</button>
+    <button id="toggle">Resume ward clock</button>
+    <span class="meta" id="clock"></span>
+  </div>
+</header>
+
+<div class="rail" id="rail"></div>
+<div id="stage"></div>
+
+<div class="nav">
+  <button id="back">← Back</button>
+  <span class="meta" id="pos"></span>
+  <button class="primary" id="next">Next →</button>
+</div>
+
+<p class="note">Backend: <code id="api"></code> · Swagger at <a href="/docs">/docs</a> ·
+   agent tool manifest at <a href="/agent/tools">/agent/tools</a></p>
+</div>
+
+<div class="feed" id="feed"><b>live event feed…</b></div>
+
+<script>
+const API = location.origin;
+document.getElementById('api').textContent = API;
+let HID = null, MID = null;
+
+const J = (m,b) => fetch(API+m.url, {method:m.method||'GET',
+    headers:{'content-type':'application/json'}, body:b?JSON.stringify(b):undefined})
+  .then(async r => ({ok:r.ok, status:r.status, body:await r.json().catch(()=>({}))}));
+
+/* ---- the walkthrough. run() returns {text, ok} shown as the real response ---- */
+const STEPS = [
+{t:'Shift start', who:'Priya (outgoing nurse) · 18:20', kind:'det',
+ what:'Three patients, one nurse, shift ends at 19:00. Nothing is drafted yet.',
+ run: async () => {
+   const r = await J({url:'/oversight/board'});
+   return {text: r.body.rows.map(x=>`${x.room}  ${x.patient.padEnd(18)} handoff: ${x.status}`).join('\n')
+     + `\n\nward time ${r.body.ward_time} · shift ends ${r.body.shift_end}`};
+ }},
+
+{t:'Build the handoff draft', who:'System · pulls from the chart', kind:'ai', ai:'AI-1',
+ what:'The backend assembles I-PASS from structured records and puts a source on every value.',
+ run: async () => {
+   await J({url:'/tasks/derive/P-101', method:'POST'});
+   const r = await J({url:'/handoffs/P-101/draft', method:'POST'});
+   HID = r.body.id;
+   const f = s => (r.body.ipass[s]||[]).map(x=>`  ${x.label}: ${x.value||'** EMPTY **'}\n     ← ${x.source}`).join('\n');
+   return {text:`${HID}  status=${r.body.status}\n\nILLNESS\n${f('illness')}\n\nPATIENT\n${f('patient')}\n\nACTION\n${f('action')}`};
+ }},
+
+{t:'Handover is refused', who:'Guard · FR-1.3', kind:'det',
+ what:'A required field has no record behind it. The handoff cannot proceed while it is empty.',
+ run: async () => {
+   const r = await J({url:`/handoffs/${HID}/readback`, method:'POST'}, {text:'she is fine'});
+   return {text:`HTTP ${r.status}\n${JSON.stringify(r.body.detail||r.body,null,2)}`, bad:!r.ok};
+ }},
+
+{t:'Nurse fills the gap', who:'Priya · types it in', kind:'det',
+ what:'The nurse enters the weight from the bed scale. The draft flips to ready.',
+ run: async () => {
+   const r = await J({url:`/handoffs/${HID}/fields/baseline_weight`, method:'PATCH'},
+                     {value:'81.4 kg (bed scale)', actor:'N-01'});
+   return {text:`status = ${r.body.status}\nmissing_required = ${JSON.stringify(r.body.missing_required)}`, ok:true};
+ }},
+
+{t:'Safety block', who:'Marcus (incoming) · reads before entering the room', kind:'det',
+ what:'Fall risk, alarm changes, isolation and restraints are pinned above everything else.',
+ run: async () => {
+   const r = await J({url:`/handoffs/${HID}`});
+   return {text: r.body.safety_block.map(x=>`${x.label}\n   ${x.value}\n   ← ${x.source}`).join('\n\n')};
+ }},
+
+{t:'Receiver reads it back', who:'Marcus · says what he understood', kind:'ai', ai:'AI-2',
+ what:'Marcus gives a short summary. The system compares it against every required item.',
+ run: async () => {
+   const said = 'Alma in 412-A, heart failure, DNR, allergic to penicillin. Watcher, had her furosemide.';
+   const r = await J({url:`/handoffs/${HID}/readback`, method:'POST'}, {text:said, actor:'N-02'});
+   return {text:`He said:\n  "${said}"\n\ncovered ${r.body.covered.length} · GAPS ${r.body.gaps.length}\n`
+     + r.body.gaps.map(g=>`  ✗ ${g.text}`).join('\n')
+     + `\n\n(${r.body.note})`, bad:r.body.gaps.length>0};
+ }},
+
+{t:'Close is refused', who:'Guard · FR-2.3 and FR-3.3', kind:'det',
+ what:'Nothing has been acknowledged and a carry-over task has no owner.',
+ run: async () => {
+   const r = await J({url:`/handoffs/${HID}/close-check`});
+   return {text:`closed = ${r.body.closed}\n\n${r.body.blockers.map(b=>'  ✗ '+b).join('\n')}`, bad:true};
+ }},
+
+{t:'Assign, acknowledge, close', who:'Marcus · takes ownership', kind:'ai', ai:'AI-3',
+ what:'Every task gets an owner, each item is acknowledged, and care transfers.',
+ run: async () => {
+   const ts = await J({url:'/tasks?patient_id=P-101'});
+   for (const t of ts.body.filter(x=>x.unowned))
+     await J({url:`/tasks/${t.id}/assign`, method:'POST'}, {owner_id:'N-02', actor:'N-02'});
+   for (const k of ['safety_block','task','contingency'])
+     await J({url:`/handoffs/${HID}/ack`, method:'POST'}, {kind:k, ref:'all', actor:'N-02'});
+   const r = await J({url:`/handoffs/${HID}/close-check`});
+   return {text:`tasks assigned to N-02\nall items acknowledged\n\nclosed = ${r.body.closed}  at ${r.body.closed_at||''}`, ok:r.body.closed};
+ }},
+
+{t:'Something is wrong with Alma', who:'Marcus · 20 minutes later', kind:'ai', ai:'AI-4',
+ what:'SpO2 is falling. He drafts an SBAR to the provider. Send is refused without an explicit ask.',
+ run: async () => {
+   const d = await J({url:'/escalations/draft', method:'POST'},
+     {patient_id:'P-101', sender_id:'N-02', urgency:'urgent',
+      concern:'SpO2 drifted 95% to 89% over four hours and she is working harder to breathe.'});
+   MID = d.body.id;
+   const s = await J({url:`/messages/${MID}/send`, method:'POST'}, {message_id:MID});
+   return {text:`SBAR ${MID} drafted, sendable = ${d.body.sendable}\n\n`
+     + `S: ${d.body.sbar.situation}\n\nB: ${d.body.sbar.background}\n\nA: ${d.body.sbar.assessment}\n\n`
+     + `R: ${d.body.sbar.recommendation || '** MISSING **'}\n\n`
+     + `--- press send ---\nHTTP ${s.status}: ${JSON.stringify(s.body.detail||s.body)}`, bad:!s.ok};
+ }},
+
+{t:'Ask added, nurse sends', who:'Marcus · presses send himself', kind:'det',
+ what:'The agent never sends. A human always does. A 10-minute re-route timer starts.',
+ run: async () => {
+   await J({url:`/escalations/${MID}/recommendation`, method:'PATCH'},
+           {recommendation:'Please review within 30 minutes — I would like a chest film and IV furosemide.'});
+   const r = await J({url:`/messages/${MID}/send`, method:'POST'}, {message_id:MID});
+   return {text:`state = ${r.body.state}\nto = ${r.body.to}\nre-route at ${r.body.reroute_at} (${r.body.reroute_rel})`, ok:true};
+ }},
+
+{t:'No reply — it re-routes', who:'System · 10 ward minutes later', kind:'det',
+ what:'The ward clock runs 60x. Nobody answered, so the page goes to the backup provider.',
+ run: async () => {
+   await J({url:'/clock/jump/11', method:'POST'});
+   await new Promise(r=>setTimeout(r,1600));
+   const r = await J({url:`/messages/${MID}`});
+   return {text:`rerouted_to = ${r.body.rerouted_to}\nnow with = ${r.body.to}\n\n`
+     + r.body.trail.map(e=>`  ${e.at}  ${e.state}`).join('\n'), ok:!!r.body.rerouted_to};
+ }},
+
+{t:'The patient nobody flagged', who:'Ruth, bed 414-A', kind:'ai', ai:'AI-5',
+ what:'Her handoff would read "settled, no concerns". The records disagree. Nothing deterministic catches this.',
+ run: async () => {
+   const r = await J({url:'/agent/call', method:'POST'},
+     {name:'get_patient_snapshot', arguments:{patient_id:'P-103'}});
+   return {text:`tool: get_patient_snapshot(P-103)   [${r.body.approx_tokens} tokens]\n\n${r.body.content}`};
+ }},
+
+{t:'Family, and the unit view', who:'Charge nurse · end of handover', kind:'ai', ai:'AI-6',
+ what:'A plain-language summary for the family, then the board and the shift report.',
+ run: async () => {
+   const f = await J({url:'/family-summary/P-102'});
+   const b = await J({url:'/oversight/board'});
+   const rp = await J({url:'/oversight/report'});
+   return {text:`FAMILY SUMMARY (${f.body.language}, ${f.body.reading_level})\n${f.body.summary}\n`
+     + `\n⚠ ${f.body.note}\n\n--- CHARGE BOARD ---\n`
+     + b.body.rows.map(x=>`${x.room}  ${x.patient.padEnd(18)} ${x.status.padEnd(12)} tasks:${x.open_tasks} unowned:${x.unowned_tasks}`).join('\n')
+     + `\n\ncompletion ${rp.body.completion_rate} · ${rp.body.audit_entries} audit entries`};
+ }},
+];
+
+let AI = {};   // filled from /agent/inference-points
+let i = 0;
+const out = {};   // step index -> rendered response
+
+function rail(){
+  document.getElementById('rail').innerHTML = STEPS.map((s,n)=>
+    `<i class="${n<i?'done':''} ${n===i?'now':''} ${s.kind==='ai'?'isai':''}"></i>`).join('');
+  document.getElementById('pos').textContent = `step ${i+1} of ${STEPS.length}`;
+  document.getElementById('back').disabled = i===0;
+  document.getElementById('next').disabled = i>=STEPS.length-1;
+}
+
+function render(){
+  const s = STEPS[i], a = s.ai ? AI[s.ai] : null;
+  const r = out[i];
+  let h = `<div class="card">
+    <span class="pill ${s.kind==='ai'?'ai':'det'}">${s.kind==='ai'?'AI INFERENCE NEEDED':'DETERMINISTIC'}</span>
+    <h2 style="margin-top:8px">${i+1}. ${s.t}</h2>
+    <p class="who">${s.who}</p>
+    <p class="what">${s.what}</p>
+    <button class="primary" onclick="runStep(this)">${r?'Run again':'Run this step'}</button>
+    ${r?`<span class="lbl">Live response from the backend</span><pre class="${r.bad?'bad':r.ok?'ok':''}">${esc(r.text)}</pre>`:''}
+  </div>`;
+
+  if (a) h += `<div class="card aicard">
+    <span class="pill ai">${a.id} · MODEL CALL</span>
+    <h2 style="margin-top:8px">${a.where}</h2>
+    <span class="lbl">What happens today, without a model</span>
+    <p class="what">${esc(a.today)}</p>
+    <span class="lbl">What the model must do</span>
+    <p class="what">${esc(a.needs_model)}</p>
+    <span class="lbl">Tools it would call</span>
+    <p class="tools">${a.tools.map(t=>`<code>${t}</code>`).join('')}</p>
+    <span class="lbl">Sample model response</span>
+    <pre>${esc(a.sample)}</pre>
+    <p class="note">Sample only — the agent layer is not built. This is what NemoClaw would
+       return here, using the tools above from <code>/agent/tools</code>.</p>
+  </div>`;
+  document.getElementById('stage').innerHTML = h;
+  rail();
+}
+const esc = t => String(t).replace(/[<>&]/g, c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+
+async function runStep(btn){
+  if(btn){btn.disabled=true; btn.textContent='running…';}
+  try { out[i] = await STEPS[i].run(); }
+  catch(e){ out[i] = {text:'error: '+e.message, bad:true}; }
+  render(); tick();
+}
+window.runStep = runStep;
+
+document.getElementById('next').onclick = ()=>{ if(i<STEPS.length-1){i++; render();} };
+document.getElementById('back').onclick = ()=>{ if(i>0){i--; render();} };
+document.getElementById('toggle').onclick = async (e)=>{
+  const c = await J({url:'/clock'});
+  const now = c.body.paused;
+  await J({url: now ? '/clock/resume' : '/clock/pause', method:'POST'});
+  e.target.textContent = now ? 'Pause ward clock' : 'Resume ward clock';
+  tick();
+};
+document.getElementById('reset').onclick = async ()=>{
+  await J({url:'/demo/reset', method:'POST'});
+  await J({url:'/clock/pause', method:'POST'});
+  document.getElementById('toggle').textContent = 'Resume ward clock';
+  for(const k in out) delete out[k];
+  i=0; HID=MID=null; render(); tick();
+};
+document.getElementById('auto').onclick = async ()=>{
+  for(i=0;i<STEPS.length;i++){ render(); out[i]=await STEPS[i].run().catch(e=>({text:e.message,bad:true}));
+    render(); await new Promise(r=>setTimeout(r,900)); }
+};
+
+async function tick(){
+  const c = await J({url:'/clock'});
+  document.getElementById('clock').textContent =
+    `ward ${c.body.ward_time} · ${c.body.speed} · ${c.body.paused ? 'PAUSED (steps advance it)' : c.body.note}`;
+}
+setInterval(tick, 3000);
+
+/* live feed */
+const feed = document.getElementById('feed');
+try{
+  const ws = new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/events');
+  ws.onmessage = e => {
+    const v = JSON.parse(e.data);
+    const d = document.createElement('div');
+    d.className = v.ch;
+    d.innerHTML = `<b>${v.t}</b> ${esc(v.ch).padEnd(9)} ${esc(v.text)}`;
+    feed.appendChild(d); feed.scrollTop = feed.scrollHeight;
+    while(feed.children.length>200) feed.removeChild(feed.firstChild);
+  };
+}catch(e){}
+
+(async ()=>{
+  await J({url:'/clock/pause', method:'POST'});   // hold the ward still while they read
+  const p = await J({url:'/agent/inference-points'});
+  (p.body.points||[]).forEach(x=>AI[x.id]=x);
+  await tick(); render();
+})();
+</script>
+</body>
+</html>

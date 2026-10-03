@@ -1,0 +1,6 @@
+# Runtime state — all regenerable: db.py rebuilds the schema, seed.py re-seeds the ward.
+.venv/
+__pycache__/
+*.pyc
+shiftguard.db
+server.log

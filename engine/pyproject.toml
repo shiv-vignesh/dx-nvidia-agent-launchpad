@@ -7,6 +7,9 @@ dependencies = ["pydantic>=2"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+# HTTP + Swagger adapter (app/web/server.py). Kept optional so the pure domain
+# and the CLI stay installable with pydantic alone.
+web = ["fastapi>=0.110", "uvicorn>=0.27"]
 
 [build-system]
 requires = ["setuptools>=68"]
