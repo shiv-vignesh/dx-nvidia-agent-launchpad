@@ -58,11 +58,49 @@ All three scripts support `--dry-run` (print what they'd do, change nothing). Mo
 
 See the bottom of [03-day-of-runbook.md](docs/onboarding/03-day-of-runbook.md) for **open questions to resolve in the first 10 minutes** — the big one: *is the Dell Pro Max actually detected as a DGX Spark?*
 
+## ShiftGuard API (`backend/`)
+
+The live service — a UI-agnostic FastAPI backend where every endpoint traces to a numbered
+requirement (FR-x.y). SQLite, synthetic patients only, no real PHI. See
+[`backend/README.md`](backend/README.md) and [`backend/SCHEMA.md`](backend/SCHEMA.md).
+
+```bash
+cd backend
+./run.sh                 # venv + deps + uvicorn on 0.0.0.0:8099 (override with SG_PORT)
+```
+
+| Where | What |
+|---|---|
+| `:8099/docs` | **Swagger UI** — 54 endpoints, grouped by feature, Try-it-out |
+| `:8099/ui` | Flow walkthrough — 13 steps against the live API |
+| `:8099/schema` | Data dictionary |
+| `ws://<host>:8099/events` | Live event stream — what a UI attaches to |
+
+Swagger assets are vendored in `app/static/`, so `/docs` loads with no internet. `POST /demo/run`
+plays the whole 19:00 shift change; the colored ward-time server console is the demo visual.
+
+## ShiftGuard rules engine (`engine/`)
+
+The pure domain slice: deterministic flagging rules plus a CLI, installable with pydantic alone and
+testable without the stack. It asks the model which on-record meds and vitals the outgoing nurse's
+narrative actually mentions, then flags what was omitted — every flag citing a concrete record.
+
+```bash
+cd engine
+pip install -e ".[dev]"
+python -m pytest -q                                           # 12 tests, no model needed
+INFERENCE_MODE=heuristic python -m app data/seed/bed4.json    # offline demo, no inference
+```
+
+Point it at a model with `INFERENCE_BASE_URL` (default `http://127.0.0.1:11434/v1` — Ollama, or the
+registry router on `:9000/v1`) and `INFERENCE_MODEL`. On the GB10, `runway -C . task demo-stub` and
+`runway -C . task run-tests` run these from `engine/` for you.
+
 ## CareChart handoff frontend
 
 The nurse handoff interface lives in [`frontend/`](frontend/README.md). It includes the
 assignment home screen, report preparation, demo recording, review, and incoming
-acknowledgement flow. It runs independently of the Python app using local demo data;
+acknowledgement flow. It runs independently of the `backend/` service using local demo data;
 backend inference, audio capture/transcription, and real delivery are not wired in yet.
 
 With Node.js 22.12+ and npm installed:

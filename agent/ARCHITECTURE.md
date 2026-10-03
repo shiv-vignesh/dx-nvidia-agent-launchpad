@@ -70,29 +70,30 @@ verifiable *without* the stack. Adapters are the only code that touches OpenClaw
 ## Section 2 — Module structure & responsibilities  *(agreed)*
 
 ```
-app/
-  main.py              # ENTRY POINT + composition root: build adapters, inject into services, start web, lifecycle
-  config.py            # settings (pydantic-settings): db path, registry URL, sandbox on/off, LOCAL_ONLY assertions
-  domain/              # PURE — no I/O, no stack imports
-    models.py          # pydantic entities + Flag/Claim/Evidence/Resolution/Summary value objects
-    rules/             # Strategy pattern: one class per check (MedDueNotMentioned, AbnormalVitalOmitted, …)
-    engine.py          # FlaggingEngine: runs all Rules over (claims, records) → deterministic Flags
-    session.py         # HandoffSession state machine (Draft→Analyzing→AwaitingConfirmation→Summarized)
-  application/
-    ports.py           # the 4 Protocols: RecordsPort, AgentPort, SandboxPort, InferencePort
-    handoff_service.py # the analyze pipeline (retrieve→extract→rules→agent-augment→merge→rank)
-    confirmation_svc.py# per-flag confirm/reject → Resolution
-    summary_service.py # compose + sign the final handoff summary
-  adapters/
-    records_sqlite.py  # RecordsPort impl
-    agent_openclaw.py  # AgentPort impl: extract_claims / augment / explain / summarize via OpenClaw
-    sandbox_openshell.py# SandboxPort impl: run agent calls inside an OpenShell sandbox, egress denied
-    inference_registry.py# InferencePort impl: our registry router → ollama|vllm|colibri
-  web/
-    server.py          # FastAPI routes; renders flag cards; confirm/reject endpoints
-    ui/                # one HTML/JS page (or Streamlit)
-  data/seed/           # synthetic patients + records + ANSWER KEY (demo-safe, no real PHI)
-tests/                 # domain rule tests vs answer key; service tests with mocked ports; golden scenarios
+engine/                  # the rules engine: pyproject.toml + app/ + tests/ (the live API is in backend/)
+  app/
+    main.py              # ENTRY POINT + composition root: build adapters, inject into services, start web, lifecycle
+    config.py            # settings (pydantic-settings): db path, registry URL, sandbox on/off, LOCAL_ONLY assertions
+    domain/              # PURE — no I/O, no stack imports
+      models.py          # pydantic entities + Flag/Claim/Evidence/Resolution/Summary value objects
+      rules/             # Strategy pattern: one class per check (MedDueNotMentioned, AbnormalVitalOmitted, …)
+      engine.py          # FlaggingEngine: runs all Rules over (claims, records) → deterministic Flags
+      session.py         # HandoffSession state machine (Draft→Analyzing→AwaitingConfirmation→Summarized)
+    application/
+      ports.py           # the 4 Protocols: RecordsPort, AgentPort, SandboxPort, InferencePort
+      handoff_service.py # the analyze pipeline (retrieve→extract→rules→agent-augment→merge→rank)
+      confirmation_svc.py# per-flag confirm/reject → Resolution
+      summary_service.py # compose + sign the final handoff summary
+    adapters/
+      records_sqlite.py  # RecordsPort impl
+      agent_openclaw.py  # AgentPort impl: extract_claims / augment / explain / summarize via OpenClaw
+      sandbox_openshell.py# SandboxPort impl: run agent calls inside an OpenShell sandbox, egress denied
+      inference_registry.py# InferencePort impl: our registry router → ollama|vllm|colibri
+    web/
+      server.py          # FastAPI routes; renders flag cards; confirm/reject endpoints
+      ui/                # one HTML/JS page (or Streamlit)
+  data/seed/             # synthetic patients + records + ANSWER KEY (demo-safe, no real PHI)
+  tests/                 # domain rule tests vs answer key; service tests with mocked ports; golden scenarios
 ```
 
 **One responsibility each:** `domain/` decides *what's true*; `application/` decides *the workflow*;

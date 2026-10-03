@@ -23,7 +23,7 @@ React/Vite prototype alongside the repository's ShiftGuard Python app.
 - Recording and live transcription are simulated. No microphone capture is implemented.
 - Delivery and questions are local demo state, not network requests.
 - Browser speech synthesis reads the sample transcript; it is not captured report audio.
-- No connection has been added to `app/application/handoff_service.py` or an inference endpoint.
+- No connection has been added to `engine/app/application/handoff_service.py` or an inference endpoint.
 - The existing Python application, configuration, and deployment scripts are unchanged.
 
 The team can replace the fixture/state boundary with an API adapter after agreeing on

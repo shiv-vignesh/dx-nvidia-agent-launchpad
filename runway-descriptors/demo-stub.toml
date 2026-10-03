@@ -3,7 +3,7 @@ description = "ShiftGuard handoff check with the no-model heuristic extractor (i
 run = "python -m app data/seed/bed4.json"
 venv = true
 push_first = true
-workdir = "."
+workdir = "engine"
 
 [env]
 INFERENCE_MODE = "heuristic"
