@@ -57,3 +57,22 @@ All three scripts support `--dry-run` (print what they'd do, change nothing). Mo
 | Default model | `nvidia/Qwen3.6-35B-A3B-NVFP4` | docs-raw deep-dive |
 
 See the bottom of [03-day-of-runbook.md](docs/onboarding/03-day-of-runbook.md) for **open questions to resolve in the first 10 minutes** — the big one: *is the Dell Pro Max actually detected as a DGX Spark?*
+
+## CareChart handoff frontend
+
+The nurse handoff interface lives in [`frontend/`](frontend/README.md). It includes the
+assignment home screen, report preparation, demo recording, review, and incoming
+acknowledgement flow. It runs independently of the Python app using local demo data;
+backend inference, audio capture/transcription, and real delivery are not wired in yet.
+
+With Node.js 22.12+ and npm installed:
+
+```bash
+cd frontend
+npm ci
+npm run dev -- --host 127.0.0.1 --port 4173
+```
+
+Open http://127.0.0.1:4173. Run `npm test` for frontend state tests and `npm run build`
+for the production bundle. See the [frontend README](frontend/README.md) for the
+end-to-end demo flow, nurse perspective switching, and integration boundaries.
