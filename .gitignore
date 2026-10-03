@@ -1,0 +1,42 @@
+# ── Raw onboarding material (summarized & linked, never tracked) ──
+docs-raw/
+
+# ── Model weights & large artifacts (go on the USB, not in git) ──
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.onnx
+*.tar
+*.tar.zst
+*.tar.gz
+hf/
+hf-cache/
+weights/
+models-cache/
+
+# ── USB bundle output (produced by scripts/bundle-offline.sh) ──
+bundle/
+bundle-output/
+wheels/
+*.bundle
+SHA256SUMS
+
+# ── Secrets ──
+.env
+.env.*
+!.env.example
+*.token
+*_token
+*.key
+*secret*
+credentials.json
+
+# ── OS / editor cruft ──
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+__pycache__/
+*.pyc
