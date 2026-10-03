@@ -2338,3 +2338,68 @@ blockquote {
 .suggestion.amber {
   color: var(--ink) !important;
 }
+
+.speech-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 600px;
+  margin: 18px auto;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.speech-consent input {
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+.record-ready textarea {
+  display: block;
+  width: min(600px, 100%);
+  margin: 10px auto;
+  padding: 12px;
+  font: inherit;
+  border: 1px solid var(--border, #d5e2e8);
+  border-radius: 8px;
+}
+/* Keep microphone consent near its action at smaller window heights. */
+.record-ready .waveform {
+  height: 28px;
+  margin: 12px auto;
+}
+.record-ready .speech-consent {
+  margin: 12px auto;
+}
+
+.login-card label {
+  display: block;
+  text-align: left;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.login-card select {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 20px;
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: var(--ink);
+}
+.login-card > button {
+  width: 100%;
+}
+.profile-menu p {
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.live-coverage { margin-bottom: 16px; }
+.coverage-row { display: grid; gap: 7px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.coverage-row small { color: var(--muted); line-height: 1.5; }
+.coverage-row blockquote { margin: 0; padding-left: 10px; border-left: 2px solid var(--line); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.coverage-status { font-size: 12px; color: #765318; font-weight: 600; }
+.coverage-status.matched { color: #087566; }

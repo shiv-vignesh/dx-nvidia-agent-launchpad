@@ -63,7 +63,7 @@ See the bottom of [03-day-of-runbook.md](docs/onboarding/03-day-of-runbook.md) f
 The nurse handoff interface lives in [`frontend/`](frontend/README.md). It includes the
 assignment home screen, report preparation, demo recording, review, and incoming
 acknowledgement flow. It runs independently of the Python app using local demo data;
-backend inference, audio capture/transcription, and real delivery are not wired in yet.
+live browser transcription is available after microphone consent. Backend inference and real delivery are not wired in yet. Browser speech recognition may use an external service; use sample speech only.
 
 With Node.js 22.12+ and npm installed:
 
