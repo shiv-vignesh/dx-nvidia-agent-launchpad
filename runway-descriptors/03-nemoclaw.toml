@@ -1,0 +1,6 @@
+name = "03-nemoclaw"
+description = "GB10 Stage 3: docker login nvcr.io + install NemoClaw (onboard is interactive; run via ssh -t)"
+script = "setup/gb10/03-nemoclaw.sh"
+workdir = "."
+push_first = true
+venv = false   # system-level installs; the project venv doesn't exist yet and isn't needed

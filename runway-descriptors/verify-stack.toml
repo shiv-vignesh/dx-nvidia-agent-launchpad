@@ -1,0 +1,6 @@
+name = "verify-stack"
+description = "GB10: end-to-end stack health (node/docker, OpenShell, OpenClaw, NemoClaw, vLLM, GPU)"
+script = "setup/gb10/verify-stack.sh"
+workdir = "."
+push_first = true
+venv = false   # read-only health check; no project venv needed

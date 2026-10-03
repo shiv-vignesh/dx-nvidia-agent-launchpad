@@ -1,0 +1,34 @@
+# runway.toml — ShiftGuard on the GB10 (Dell Pro Max, DGX Spark-class, linux arm64)
+#
+# Mirrors this project to the GB10 over rsync/SSH, sets up a Python venv there,
+# and runs task descriptors from runway-descriptors/. Day-to-day:
+#   runway -C . status          # reachability, GPU, disk, venv, pending push
+#   runway -C . push            # mirror local tree -> GB10 (uncommitted edits and all)
+#   runway -C . task <name>     # run a descriptor (e.g. install-stack, verify-stack)
+#
+# ⚠ THREE values below are placeholders — fill them from your GB10 SSH setup before use.
+#   runway needs KEY-BASED SSH (ssh-copy-id to the box first).
+
+# ── The box ──────────────────────────────────────────────────────────────
+[remote]
+host = "shiv@172.20.65.125"       # anything you can `ssh` into, e.g. nvidia@192.168.1.50
+port = 22                                     # GB10 SSH port (change if non-default)
+dir  = "/home/shiv/shiftguard"      # absolute, writable; must NOT be / /root /workspace (runway forbids those for --delete)
+
+# ── The Python environment (for our app) ─────────────────────────────────
+[venv]
+path   = "/home/shiv/.venvs/shiftguard"  # MUST live OUTSIDE [remote].dir (push uses --delete and would wipe it)
+python = "python3"
+system_site_packages = true                   # see system CUDA/torch if present
+setup_script = "setup/gb10-setup.sh"           # on-box setup (created in the NEXT step: venv deps; stack install is a descriptor)
+
+# ── What gets pushed ─────────────────────────────────────────────────────
+# .git is always excluded; everything else honours .gitignore (weights, .env, bundles already excluded).
+[sync]
+excludes_files = [".gitignore"]
+
+# ── What gets pulled back ────────────────────────────────────────────────
+# Additive copy-down; never deletes. Keep outputs OUTSIDE the code mirror.
+[pull]
+base = "/home/shiv"                  # outputs live beside the code, outside the --delete'd mirror
+dirs = ["shiftguard-out"]                      # logs / handoff summaries / artifacts (created as needed) -> ./shiftguard-out

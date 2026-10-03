@@ -1,0 +1,6 @@
+name = "00-prereqs"
+description = "GB10 Stage 0: docker group + daemon up, Node 22.x (needs passwordless sudo)"
+script = "setup/gb10/00-prereqs.sh"
+workdir = "."
+push_first = true
+venv = false   # system-level installs; the project venv doesn't exist yet and isn't needed

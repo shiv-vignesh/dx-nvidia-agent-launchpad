@@ -35,6 +35,12 @@ SHA256SUMS
 *secret*
 credentials.json
 
+# ── Local-only tooling (macOS; must NOT sync to the Linux GB10) ──
+.stack/
+.venv/
+venv/
+.pytest_cache/
+
 # ── OS / editor cruft ──
 .DS_Store
 Thumbs.db
@@ -43,3 +49,5 @@ Thumbs.db
 .vscode/
 __pycache__/
 *.pyc
+*.egg-info/
+.pytest_cache/

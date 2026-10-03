@@ -1,0 +1,6 @@
+name = "01-openshell"
+description = "GB10 Stage 1: install OpenShell (deb), start gateway, verify a sandbox"
+script = "setup/gb10/01-openshell.sh"
+workdir = "."
+push_first = true
+venv = false   # system-level installs; the project venv doesn't exist yet and isn't needed
