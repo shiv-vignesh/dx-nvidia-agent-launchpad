@@ -23,7 +23,7 @@ React/Vite prototype alongside the repository's ShiftGuard Python app.
 - Live microphone transcription uses browser SpeechRecognition after consent. Audio is not stored; the browser may use an external speech service.
 - Delivery and questions are local demo state, not network requests.
 - Browser speech synthesis reads report text; it is not captured microphone audio.
-- No connection has been added to `app/application/handoff_service.py` or an inference endpoint.
+- No connection has been added to `backend/`, `engine/app/application/handoff_service.py`, or an inference endpoint.
 - The existing Python application, configuration, and deployment scripts are unchanged.
 
 The team can replace the fixture/state boundary with an API adapter after agreeing on

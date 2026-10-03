@@ -3,4 +3,4 @@ description = "Run the ShiftGuard test suite (pytest) in the app venv on the GB1
 run = "python -m pytest -q"
 venv = true          # activate /home/shiv/.venvs/shiftguard (created by setup/gb10-setup.sh)
 push_first = true
-workdir = "."
+workdir = "engine"
