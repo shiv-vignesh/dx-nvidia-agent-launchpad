@@ -1,22 +1,19 @@
-// OUR model registry. The agent (OpenClaw) and the stack (OpenShell inference.local)
-// call ONE endpoint: this router. Swap a model's backend here; the agent never changes.
-// Full-line // comments only (stripped before parse); everything else is valid JSON.
+// OUR model registry (GB10 deployment). Consumers call ONE endpoint — this router (:9000) —
+// and pick the model by name; the router forwards to the right vLLM instance. Add/swap a
+// model here; agents/UI never change. Full-line // comments only (stripped before parse).
 {
   "router": { "host": "127.0.0.1", "port": 9000 },
-  "default_model": "qwen2.5:7b",
+  "default_model": "qwen3.6",
 
   "backends": {
-    "ollama":  { "base_url": "http://127.0.0.1:11434/v1", "api_key": "ollama-local" },
-    "vllm":    { "base_url": "http://127.0.0.1:8000/v1",  "api_key": "placeholder" },
-    "colibri": { "base_url": "http://127.0.0.1:8001/v1",  "api_key": "placeholder" }
+    "vllm-qwen":     { "base_url": "http://127.0.0.1:8000/v1", "api_key": "x" },
+    "vllm-nemotron": { "base_url": "http://127.0.0.1:8001/v1", "api_key": "x" }
+    // dev-only (laptop): "ollama": { "base_url": "http://127.0.0.1:11434/v1", "api_key": "ollama-local" }
   },
 
   "models": {
-    // runnable on the Mac tonight:
-    "qwen2.5:7b":  { "backend": "ollama",  "upstream_model": "qwen2.5:7b" },
-    // tomorrow on the GB10 - swap the SAME logical name to vLLM, agent untouched:
-    "qwen3.6-35b": { "backend": "vllm",    "upstream_model": "nvidia/Qwen3.6-35B-A3B-NVFP4" },
-    // a colibri-served frontier MoE option (OpenAI-compatible on its own port):
-    "glm-5.2":     { "backend": "colibri", "upstream_model": "/nvme/glm52_i4" }
+    // upstream_model = each vLLM's --served-model-name
+    "qwen3.6":  { "backend": "vllm-qwen",     "upstream_model": "qwen3.6" },
+    "nemotron": { "backend": "vllm-nemotron", "upstream_model": "nemotron" }
   }
 }

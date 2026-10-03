@@ -1,0 +1,6 @@
+name = "run-flow"
+description = "nemotron drives the CareChart inference points via tool calling (all 6; --point for one)"
+run = "python3 agent/driver.py"
+venv = false
+push_first = true
+workdir = "."

@@ -14,6 +14,10 @@ hf/
 hf-cache/
 weights/
 models-cache/
+nvidia-models/
+qwen3.6-35b-a3b-nvfp4/
+*nvfp4/
+*NVFP4/
 
 # ── USB bundle output (produced by scripts/bundle-offline.sh & setup/install-stack.sh) ──
 bundle/
