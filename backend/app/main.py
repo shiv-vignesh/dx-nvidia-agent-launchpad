@@ -230,3 +230,12 @@ async def events_ws(ws: WebSocket):
         events.unregister(ws)
     except Exception:
         events.unregister(ws)
+
+
+from .coverage import router as _coverage_router  # noqa: E402  (AI-2 semantic coverage)
+app.include_router(_coverage_router)
+
+# CareChart UI, built and served from this same process (one origin, no CORS, no tunnel).
+_WEBUI = Path(__file__).parent / "webui"
+if _WEBUI.exists():
+    app.mount("/app", StaticFiles(directory=_WEBUI, html=True), name="carechart")

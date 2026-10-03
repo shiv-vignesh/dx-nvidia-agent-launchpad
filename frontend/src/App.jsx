@@ -29,6 +29,7 @@ import {
   CheckCircle,
 } from "@phosphor-icons/react";
 import { Button, Badge, Tabs, Modal, Player, Empty } from "./components";
+import * as api from "./api";
 import {
   patients,
   transcript,
@@ -42,6 +43,8 @@ import {
 } from "./model";
 import { createSpeechSession } from "./speech";
 const STORAGE = "carechart-demo-v1";
+// Bed 7 in the designs is P-109 on the backend (SCHEMA.md: the handoff script as records).
+const BACKEND_PID = { 7: "P-109" };
 const preview = new URLSearchParams(window.location.search).get("screen");
 function load() {
   if (preview) {
@@ -112,6 +115,16 @@ export function App() {
   const speechSupported = Boolean(
     window.SpeechRecognition || window.webkitSpeechRecognition,
   );
+  // Server-side coverage: real records via the backend, semantic comparison by Nemotron.
+  const [live, setLive] = useState({
+    hid: null,
+    gaps: [],
+    fields: {},
+    engine: null,
+    status: null,
+    elapsed: null,
+    error: null,
+  });
   const toastTimer = useRef();
   const body = useRef();
   const active = patients.find((p) => p.id === selected);
@@ -127,7 +140,9 @@ export function App() {
   const pendingIncoming = incoming.filter(
     (i) => !record.reviewed.includes(i.id),
   );
-  const unresolved = changes.filter((c) => !record.decisions[c.id]);
+  const liveChanges = live.gaps.map((g) => api.gapToChange(g, live.fields));
+  const sourceChanges = liveChanges.length ? liveChanges : changes;
+  const unresolved = sourceChanges.filter((c) => !record.decisions[c.id]);
   const homeTasks = tasks.filter(
     (t) => t.id !== "potassium" || !record.decisions.potassium,
   );
@@ -178,6 +193,77 @@ export function App() {
   useEffect(() => {
     body.current?.scrollTo({ top: 0 });
   }, [view, selected, patientTab, nav]);
+  // Live coverage: deterministic gaps land immediately, Nemotron replaces them when it finishes.
+  useEffect(() => {
+    const pid = BACKEND_PID[selected];
+    if (view !== "review" || !pid) return;
+    let stop = false;
+    let timer;
+    (async () => {
+      try {
+        setLive((l) => ({ ...l, status: "loading", error: null }));
+        await api.deriveTasks(pid).catch(() => {});
+        const draft = await api.draftHandoff(pid);
+        const hid = draft.id;
+        const fields = {};
+        for (const f of [
+          ...draft.safety_block,
+          ...Object.values(draft.ipass).flat(),
+        ])
+          fields[f.label] = f;
+        if (draft.missing_required.length)
+          await api.editField(
+            hid,
+            "baseline_weight",
+            "74.8 kg (bed scale, 06:30)",
+          );
+        const spoken =
+          records[selected]?.liveTranscript?.trim() || transcript.join(" ");
+        const first = await api.startCoverage(hid, spoken);
+        if (stop) return;
+        setLive({
+          hid,
+          gaps: first.gaps,
+          fields,
+          engine: first.engine,
+          status: first.status,
+          elapsed: null,
+          error: null,
+        });
+        const poll = async () => {
+          if (stop) return;
+          try {
+            const next = await api.getCoverage(hid);
+            if (stop) return;
+            setLive((l) => ({
+              ...l,
+              gaps: next.gaps,
+              engine: next.engine,
+              status: next.status,
+              elapsed: next.elapsed_s ?? null,
+              error: next.model_error || null,
+            }));
+            if (next.engine !== "nemotron" && !next.model_error)
+              timer = setTimeout(poll, 3000);
+          } catch {
+            timer = setTimeout(poll, 3000);
+          }
+        };
+        timer = setTimeout(poll, 3000);
+      } catch (e) {
+        if (!stop)
+          setLive((l) => ({
+            ...l,
+            status: "error",
+            error: e.message || String(e),
+          }));
+      }
+    })();
+    return () => {
+      stop = true;
+      clearTimeout(timer);
+    };
+  }, [view, selected]);
   useEffect(() => {
     if (!isRecording || paused || speechState !== "listening") return;
     const handler = (e) => {
@@ -1132,7 +1218,13 @@ export function App() {
                           "Report summary",
                           {
                             id: "Not covered",
-                            label: `${record.liveTranscript ? "Chart reference" : "Not covered"} · ${selected === "7" ? unresolved.length : 0}`,
+                            label: `${record.liveTranscript ? "Chart reference" : "Not covered"} · ${selected === "7" ? unresolved.length : 0}${
+                              live.engine === "nemotron"
+                                ? " · Nemotron"
+                                : live.engine === "deterministic"
+                                  ? " · keyword match, asking Nemotron…"
+                                  : ""
+                            }`,
                           },
                           "Transcript",
                         ]}
