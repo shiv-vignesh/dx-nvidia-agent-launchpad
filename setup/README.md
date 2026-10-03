@@ -9,7 +9,7 @@ package is real — because several obvious ones are squats.
 | Tool | ✅ Install this | ❌ Do NOT install |
 |---|---|---|
 | **OpenClaw** | `npm i -g openclaw` (repo-linked, `2026.9.8`) | — |
-| **OpenShell** | **PyPI `openshell` (`0.1.2`)** — summary + URLs match NVIDIA; or `install.sh` | **npm `openshell@0.1.0`** (no repo/home = squat) |
+| **OpenShell** | **runtime** via `install.sh` (brew tap on macOS / deb/rpm on Linux). **PyPI `openshell` 0.1.2 is the Python SDK (client), not the runtime** — see [warmup/openshell-on-mac.md](../warmup/openshell-on-mac.md) | **npm `openshell@0.1.0`** (no repo/home = squat) |
 | **NemoClaw** | `nemoclaw.sh` installer / `git clone NVIDIA/NemoClaw` | **npm `nemoclaw@0.1.0`** and **PyPI `nemoclaw`** (squats) |
 | **colibri** | **`git clone JustVugg/colibri`** + build, or release binary | **PyPI `colibri`** — that's an unrelated *AMQP client* |
 
@@ -23,7 +23,7 @@ curl -fsSLo nemoclaw.sh https://www.nvidia.com/nemoclaw.sh   # then: bash nemocl
 | Tool | Linux arm64 (GB10) | macOS Apple Silicon | Notes |
 |---|:--:|:--:|---|
 | OpenClaw | ✅ | ✅ | Node 22.19+/24/26; installed + verified on the Mac |
-| OpenShell | ✅ | ✅ (claims support) | needs Docker/Podman; **unverified on our Mac — test before relying on it** |
+| OpenShell | ✅ | ✅ **verified** | macOS uses a Linux-VM driver (`vm`) + needs `e2fsprogs`; installed + sandbox tested — see [warmup/openshell-on-mac.md](../warmup/openshell-on-mac.md) |
 | NemoClaw | ✅ (DGX) | ❌ | "supported DGX or WSL host" — **Spark-side only** |
 | colibri | ✅ | ✅ | pure C + OpenMP; OpenAI-compatible server on `:8000` (we map it to `:8001`) |
 
