@@ -1,0 +1,15 @@
+{
+  "records": {
+    "patient_id": "bed-4",
+    "meds": [
+      {"name": "insulin", "due_at": "2026-10-03T18:00:00"},
+      {"name": "heparin", "due_at": "2026-10-03T20:00:00"}
+    ],
+    "vitals": [
+      {"name": "SpO2", "value": 88, "is_abnormal": true},
+      {"name": "HR", "value": 72, "is_abnormal": false}
+    ]
+  },
+  "handoff": "Patient in bed 4 stable overnight. Gave heparin around 2000. Vitals look fine, no concerns for the next shift.",
+  "expected_flags": ["med_due_not_mentioned", "abnormal_vital_omitted"]
+}

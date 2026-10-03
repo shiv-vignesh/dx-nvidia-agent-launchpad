@@ -1,0 +1,6 @@
+name = "download-nemotron"
+description = "Download NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 from HF to the GB10 (~60 GB, resumable)"
+run = "bash setup/gb10/download-model.sh nemotron"
+workdir = "."
+push_first = true
+venv = false

@@ -1,0 +1,9 @@
+name = "demo-stub"
+description = "ShiftGuard handoff check with the no-model heuristic extractor (instant, offline)"
+run = "python -m app data/seed/bed4.json"
+venv = true
+push_first = true
+workdir = "."
+
+[env]
+INFERENCE_MODE = "heuristic"

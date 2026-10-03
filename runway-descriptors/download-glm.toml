@@ -1,0 +1,6 @@
+name = "download-glm"
+description = "Download GLM-5.2-NVFP4 from HF to the GB10 (large — run after qwen+nemotron)"
+run = "bash setup/gb10/download-model.sh glm"
+workdir = "."
+push_first = true
+venv = false

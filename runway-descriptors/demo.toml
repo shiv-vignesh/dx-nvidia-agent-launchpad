@@ -1,0 +1,10 @@
+name = "demo"
+description = "ShiftGuard: run the handoff check on a seed case via local inference (Ollama)"
+run = "python -m app data/seed/bed4.json"
+venv = true
+push_first = true
+workdir = "."
+
+[env]
+INFERENCE_BASE_URL = "http://127.0.0.1:11434/v1"
+INFERENCE_MODEL = "qwen2.5:7b"
